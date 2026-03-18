@@ -164,6 +164,15 @@ canvas#canvas {
 </style>
 </head>
 <body class="upload-mode">
+<!-- Loading overlay for resource downloads -->
+<div id="global-loading-overlay" style="display:none;position:fixed;z-index:9999;inset:0;background:#000;align-items:center;justify-content:center;flex-direction:column;">
+    <div id="global-loading-bar" style="width:320px;max-width:80vw;height:18px;background:#222;border-radius:8px;overflow:hidden;margin-bottom:1.2em;">
+        <div id="global-loading-bar-fill" style="height:100%;width:0%;background:#4ecca3;transition:width 0.2s;"></div>
+    </div>
+    <div id="global-loading-text" style="color:#eee;font-size:1.1em;text-align:center;"></div>
+</div>
+</head>
+<body class="upload-mode">
 <div id="upload-screen">
     <h1><a href="https://github.com/wszqkzqk/PvZ-Portable" target="_blank" rel="noopener noreferrer">PvZ Portable | Play Anywhere</a></h1>
     <p id="project-links">
@@ -221,9 +230,7 @@ canvas#canvas {
 <!-- Module must be defined BEFORE the Emscripten glue script -->
 <script>
 'use strict';
-
 // --- AUTO-LOAD RESOURCES AND AUTO-START GAME ---
-// List of resources to auto-load from the server (adjust paths as needed)
 const AUTOLOAD_RESOURCES = [
     { path: 'main.pak', url: 'main.pak' },
     { path: 'properties/default.xml', url: 'properties/default.xml' },
@@ -239,17 +246,59 @@ async function autoloadAndStart() {
     if (uploadScreen) uploadScreen.style.display = 'none';
     const canvasContainer = document.getElementById('canvas-container');
     if (canvasContainer) canvasContainer.style.display = 'none';
-    // Fetch all resources
+    // Show global loading overlay
+    const overlay = document.getElementById('global-loading-overlay');
+    const barFill = document.getElementById('global-loading-bar-fill');
+    const loadingText = document.getElementById('global-loading-text');
+    overlay.style.display = 'flex';
+    loadingText.textContent = 'Downloading game assets...';
+    let mainPakLoaded = false;
     for (const res of AUTOLOAD_RESOURCES) {
         try {
-            const response = await fetch(res.url);
-            if (!response.ok) continue;
-            const data = new Uint8Array(await response.arrayBuffer());
-            collectedFiles.set(res.path, new File([data], res.path.split('/').pop()));
+            if (res.path === 'main.pak') {
+                loadingText.textContent = 'Downloading main.pak...';
+                const response = await fetch(res.url);
+                if (!response.ok) throw new Error('Failed to fetch main.pak');
+                const contentLength = response.headers.get('Content-Length');
+                const total = contentLength ? parseInt(contentLength) : 0;
+                const reader = response.body.getReader();
+                let received = 0;
+                let chunks = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    if (total) {
+                        barFill.style.width = Math.floor((received / total) * 100) + '%';
+                    } else {
+                        barFill.style.width = Math.min(100, Math.floor(received / 10000)) + '%';
+                    }
+                }
+                const data = new Uint8Array(received);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    data.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                collectedFiles.set(res.path, new File([data], res.path.split('/').pop()));
+                mainPakLoaded = true;
+                barFill.style.width = '100%';
+            } else {
+                loadingText.textContent = 'Downloading ' + res.path + '...';
+                const response = await fetch(res.url);
+                if (!response.ok) throw new Error('Failed to fetch ' + res.path);
+                const data = new Uint8Array(await response.arrayBuffer());
+                collectedFiles.set(res.path, new File([data], res.path.split('/').pop()));
+            }
         } catch (e) {
-            // Ignore missing files
+            loadingText.textContent = 'Error downloading ' + res.path + ': ' + (e.message || e);
+            barFill.style.background = '#e74c3c';
+            throw e;
         }
     }
+    // Hide overlay after loading
+    overlay.style.display = 'none';
     // If all required resources are present, start the game
     hasPak = collectedFiles.has('main.pak');
     hasProperties = false;
@@ -259,8 +308,11 @@ async function autoloadAndStart() {
     if (hasPak && hasProperties) {
         await startGame();
     } else {
-        // Optionally show an error or fallback UI here
-        console.error('Required resources not found on server.');
+        // Show error overlay
+        overlay.style.display = 'flex';
+        loadingText.textContent = 'Required resources not found on server.';
+        barFill.style.background = '#e74c3c';
+        throw new Error('Required resources not found on server.');
     }
 }
 
@@ -270,17 +322,18 @@ window.moduleReadyPromise = new Promise(function(resolve, reject) {
     window._rejectModuleReady = reject;
 });
 
-var Module = {
-    canvas: document.getElementById('canvas'),
-    noInitialRun: true,
-    onRuntimeInitialized: function() {
-        window._resolveModuleReady();
-    },
-    onAbort: function(what) {
-        window._rejectModuleReady(new Error(what));
-    },
-    print: function(text) { console.log(text); },
-    printErr: function(text) { console.warn(text); }
+// WASM Streaming Instantiation and Optimized WASM Loader
+var Module = window.Module || {};
+Module.canvas = document.getElementById('canvas');
+Module.noInitialRun = true;
+Module.onRuntimeInitialized = function() { window._resolveModuleReady(); };
+Module.onAbort = function(what) { window._rejectModuleReady(new Error(what)); };
+Module.print = function(text) { console.log(text); };
+Module.printErr = function(text) { console.warn(text); };
+// Use the optimized WASM file
+Module.locateFile = function(path, prefix) {
+    if (path.endsWith('.wasm')) return 'pvz-portable.opt.wasm';
+    return prefix + path;
 };
 </script>
 {{{ SCRIPT }}}

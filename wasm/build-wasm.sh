@@ -80,7 +80,17 @@ emcmake cmake "${PROJECT_DIR}" \
     -DCMAKE_FIND_ROOT_PATH="${OPENMPT_PREFIX}" \
     -G Ninja
 
+
 cmake --build . -j"${NPROC}"
+
+# Optimize the WASM binary with wasm-opt -O3
+if command -v wasm-opt &> /dev/null; then
+    echo "Optimizing WebAssembly binary with wasm-opt -O3 --enable-bulk-memory-opt --enable-nontrapping-float-to-int..."
+    wasm-opt -O3 --enable-bulk-memory-opt --enable-nontrapping-float-to-int -o "${BUILD_DIR}/pvz-portable.opt.wasm" "${BUILD_DIR}/pvz-portable.wasm"
+    echo "Optimized WASM output: ${BUILD_DIR}/pvz-portable.opt.wasm"
+else
+    echo "Warning: wasm-opt not found. Skipping WASM optimization."
+fi
 
 echo ""
 echo "Build complete! Output files:"
