@@ -221,6 +221,11 @@ if(EMSCRIPTEN)
 		SDL2_mixer_ext_Static
 		${OPENMPT_LIB}
 	)
+	add_custom_command(
+		TARGET pvz-portable PRE_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/game-assets/main.pak ${CMAKE_BINARY_DIR}/main.pak
+		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/game-assets/properties ${CMAKE_BINARY_DIR}/properties
+	)
 	target_link_options(pvz-portable PRIVATE
 		"SHELL:-sUSE_SDL=2"
 		"SHELL:-sUSE_ZLIB=1"
@@ -237,6 +242,8 @@ if(EMSCRIPTEN)
 		"SHELL:-sINVOKE_RUN=0"
 		"SHELL:-lidbfs.js"
 		"SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/wasm/shell.html"
+		"SHELL:--preload-file ${CMAKE_BINARY_DIR}/main.pak@/main.pak"
+		"SHELL:--preload-file ${CMAKE_BINARY_DIR}/properties@/properties"
 	)
 	set_target_properties(pvz-portable PROPERTIES SUFFIX ".html")
 else()

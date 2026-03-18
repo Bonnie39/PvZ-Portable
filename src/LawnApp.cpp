@@ -134,8 +134,8 @@ LawnApp::LawnApp()
 	mSfxVolume = 0.5525;
 	mAutoStartLoadingThread = false;
 	mDebugKeysEnabled = false;
-	mProdName = "io.github.wszqkzqk.pvz-portable";
-	std::string aTitleName = "PvZ Portable";
+	mProdName = "com.bonnie39.pvz";
+	std::string aTitleName = "Plants vs. Zombies";
 	mTitle = aTitleName;
 	mCustomCursorsEnabled = false;
 	mPlayerInfo = nullptr;

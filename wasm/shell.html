@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PvZ Portable — Web</title>
+<title>Plants vs. Zombies</title>
+<link rel="shortcut icon" href="icon.webp"/>
+<link rel="apple-touch-icon" href="icon.webp"/>
+<link rel="icon" type="image/png" sizes="180x180" href="icon.webp"/>
+<link rel="icon" type="image/x-icon" href="icon.webp">
+<meta name="msapplication-TileImage" content="icon.webp"/>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    background: #1a1a2e; color: #eee;
+    background: #000; color: #eee;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     min-height: 100vh;
 }
@@ -215,6 +220,51 @@ canvas#canvas {
 
 <!-- Module must be defined BEFORE the Emscripten glue script -->
 <script>
+'use strict';
+
+// --- AUTO-LOAD RESOURCES AND AUTO-START GAME ---
+// List of resources to auto-load from the server (adjust paths as needed)
+const AUTOLOAD_RESOURCES = [
+    { path: 'main.pak', url: 'main.pak' },
+    { path: 'properties/default.xml', url: 'properties/default.xml' },
+    { path: 'properties/Layout.xml', url: 'properties/Layout.xml' },
+    { path: 'properties/partner.xml', url: 'properties/partner.xml' },
+    { path: 'properties/partner.xml.sig', url: 'properties/partner.xml.sig' }
+];
+
+async function autoloadAndStart() {
+    // Hide all UI, show black background
+    document.body.style.background = '#000';
+    const uploadScreen = document.getElementById('upload-screen');
+    if (uploadScreen) uploadScreen.style.display = 'none';
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer) canvasContainer.style.display = 'none';
+    // Fetch all resources
+    for (const res of AUTOLOAD_RESOURCES) {
+        try {
+            const response = await fetch(res.url);
+            if (!response.ok) continue;
+            const data = new Uint8Array(await response.arrayBuffer());
+            collectedFiles.set(res.path, new File([data], res.path.split('/').pop()));
+        } catch (e) {
+            // Ignore missing files
+        }
+    }
+    // If all required resources are present, start the game
+    hasPak = collectedFiles.has('main.pak');
+    hasProperties = false;
+    for (const key of collectedFiles.keys()) {
+        if (key.startsWith('properties/')) { hasProperties = true; break; }
+    }
+    if (hasPak && hasProperties) {
+        await startGame();
+    } else {
+        // Optionally show an error or fallback UI here
+        console.error('Required resources not found on server.');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', autoloadAndStart);
 window.moduleReadyPromise = new Promise(function(resolve, reject) {
     window._resolveModuleReady = resolve;
     window._rejectModuleReady = reject;
